@@ -9,11 +9,12 @@ import datetime
 import time
 import threading
 import logging
-import urllib
+import urllib.request, urllib.parse, urllib.error
 from HttpClient import HttpClient
+import imp
 
-reload(sys)
-sys.setdefaultencoding("utf-8")
+imp.reload(sys)
+#sys.setdefaultencoding("utf-8")
 
 HttpClient_Ist = HttpClient()
 
@@ -98,12 +99,11 @@ def gethash(selfuin, ptwebqq):
 
 def getReValue(html, rex, er, ex):
     v = re.search(rex, html)
-
     if v is None:
         logging.error(er)
 
         if ex:
-            raise Exception, er
+            raise Exception(er)
         return ''
 
     return v.group(1)
@@ -139,14 +139,14 @@ def msg_handler(msgObj):
                         info = json.loads(HttpClient_Ist.Get('http://d1.web2.qq.com/channel/get_c2cmsg_sig2?id={0}&to_uin={1}&clientid={2}&psessionid={3}&service_type={4}&t={5}'.format(myid, tuin, ClientID, PSessionID, service_type, get_ts()), Referer))
                         logging.info("Get group sig:" + str(info))
                         if info['retcode'] != 0:
-                            raise ValueError, info
+                            raise ValueError(info)
                         info = info['result']
                         group_sig = info['value']
                     tmpThread = pmchat_thread(tuin,isSess,group_sig,service_type)
                     tmpThread.start()
                     ThreadList.append(tmpThread)
                     tmpThread.push(txt,msg_id)
-                except Exception, e:
+                except Exception as e:
                     logging.info("error"+str(e))
 
             # print "{0}:{1}".format(self.FriendList.get(tuin, 0), txt)
@@ -184,14 +184,14 @@ def msg_handler(msgObj):
         # QQ号在另一个地方登陆, 被挤下线
         if msgType == 'kick_message':
             logging.error(msg['value']['reason'])
-            raise Exception, msg['value']['reason']  # 抛出异常, 重新启动WebQQ, 需重新扫描QRCode来完成登陆
+            raise Exception(msg['value']['reason'])  # 抛出异常, 重新启动WebQQ, 需重新扫描QRCode来完成登陆
 
 
 def combine_msg(content):
     msgTXT = ""
     for part in content:
         # print type(part)
-        if type(part) == type(u'\u0000'):
+        if type(part) == type('\\u0000'):
             msgTXT += part
         elif len(part) > 1:
             # 如果是图片
@@ -262,6 +262,7 @@ class Login(HttpClient):
         logging.critical("正在获取登陆页面")
         self.Get('http://w.qq.com/')
         html = self.Get(SmartQQUrl,'http://w.qq.com/')
+
         logging.critical("正在获取appid")
         APPID = getReValue(html, r'<input type="hidden" name="aid" value="(\d+)" />', 'Get AppId Error', 1)
         logging.critical("正在获取login_sig")
@@ -295,7 +296,7 @@ class Login(HttpClient):
 
         logging.info(ret)
         if ret[1] != '0':
-            raise ValueError, "RetCode = "+ret['retcode']
+            raise ValueError("RetCode = "+ret['retcode'])
             return
         logging.critical("二维码已扫描，正在登陆")
         pass_time()
@@ -320,9 +321,11 @@ class Login(HttpClient):
         LoginError = 3
         while LoginError > 0:
             try:
+                print("*"*LoginError)
                 html = self.Post('http://d1.web2.qq.com/channel/login2', {
                     'r': '{{"ptwebqq":"{0}","clientid":{1},"psessionid":"{2}","status":"online"}}'.format(PTWebQQ, ClientID, PSessionID)
                 }, 'http://d1.web2.qq.com/proxy.html?v=20151105001&callback=1&id=2')
+                print(html)
                 ret = json.loads(html)
                 html2 = self.Get("http://s.web2.qq.com/api/getvfwebqq?ptwebqq={0}&clientid={1}&psessionid={2}&t={3}".format(PTWebQQ, ClientID, PSessionID, get_ts()), Referer)
                 logging.info("getvfwebqq html:  " + str(html2))
@@ -330,12 +333,12 @@ class Login(HttpClient):
                 LoginError = 0
             except:
                 LoginError -= 1
-                logging.critical("登录失败，正在重试")
-
+                logging.critical("{0}登录失败，正在重试".format(LoginError))
+        print("####" * 20)
         if ret['retcode'] != 0 or ret2['retcode'] != 0:
-            raise ValueError, "Login Retcode="+str(ret['retcode'])
+            raise ValueError("Login Retcode="+str(ret['retcode']))
             return
-
+        print("llllllll"*20)
         VFWebQQ = ret2['result']['vfwebqq']
         PSessionID = ret['result']['psessionid']
         MyUIN = ret['result']['uin']
@@ -349,7 +352,7 @@ class Login(HttpClient):
             }, Referer)
         ret = json.loads(html)
         if ret['retcode']!= 0:
-            raise ValueError, "retcode error when getting group list: retcode="+str(ret['retcode'])
+            raise ValueError("retcode error when getting group list: retcode="+str(ret['retcode']))
         for t in ret['result']['gnamelist']:
             GroupNameList[str(t["name"])]=t["gid"]
             GroupCodeList[int(t["gid"])]=int(t["code"])
@@ -482,7 +485,7 @@ class pmchat_thread(threading.Thread):
             self.replystreak = self.replystreak + 1
             logging.info("PM get info from AI: "+ipContent)
             paraf={ 'userid' : str(self.tuin), 'key' : tulingkey, 'info' : ipContent}
-            info = HttpClient_Ist.Get('http://www.tuling123.com/openapi/api?'+urllib.urlencode(paraf))
+            info = HttpClient_Ist.Get('http://www.tuling123.com/openapi/api?'+urllib.parse.urlencode(paraf))
             logging.info("AI REPLY:"+str(info))
             info = json.loads(info)
             if info["code"] in [40001, 40003, 40004]:
@@ -495,7 +498,7 @@ class pmchat_thread(threading.Thread):
                 rpy = str(info["text"]).replace('<主人>','你').replace('<br>',"\n")
                 self.reply(rpy)
             return True
-        except Exception, e:
+        except Exception as e:
             logging.error("ERROR:"+str(e))
         return False
 
@@ -656,7 +659,7 @@ class group_thread(threading.Thread):
             with open("database."+str(self.gid)+".save", "w+") as savefile:
                 savefile.write(json.dumps(self.replyList))
                 savefile.close()
-        except Exception, e:
+        except Exception as e:
             logging.error("写存档出错："+str(e))
     def load(self):
         try:
@@ -665,7 +668,7 @@ class group_thread(threading.Thread):
                 if saves:
                     self.replyList = json.loads(saves)
                 savefile.close()
-        except Exception, e:
+        except Exception as e:
             logging.info("读取存档出错:"+str(e))
 
     def callout(self, send_uin, content):
@@ -677,7 +680,7 @@ class group_thread(threading.Thread):
                 usr = str(send_uin)
                 paraf={ 'userid' : usr+'g', 'key' : tulingkey, 'info' : str(match.group(2)).decode('UTF-8')}
 
-                info = HttpClient_Ist.Get('http://www.tuling123.com/openapi/api?'+urllib.urlencode(paraf))
+                info = HttpClient_Ist.Get('http://www.tuling123.com/openapi/api?'+urllib.parse.urlencode(paraf))
                 logging.info("AI REPLY:"+str(info))
                 info = json.loads(info)
                 if info["code"] in [40001, 40003, 40004]:
@@ -689,7 +692,7 @@ class group_thread(threading.Thread):
                 else:
                     self.reply(str(info["text"]).replace('<主人>','你').replace('<br>',"\n"))
                 return True
-        except Exception, e:
+        except Exception as e:
             logging.error("ERROR"+str(e))
         return False
 
@@ -702,7 +705,7 @@ class group_thread(threading.Thread):
                 info="小黄鸡3.8 By Jeffery 详细说明见github.com/zeruniverse/QQRobot"
                 self.reply(info)
                 return True
-        except Exception, e:
+        except Exception as e:
             logging.error("ERROR"+str(e))
         return False
 
@@ -717,7 +720,7 @@ class group_thread(threading.Thread):
                 self.save()
                 self.reply(info)
                 return True
-        except Exception, e:
+        except Exception as e:
             logging.error("ERROR:"+str(e))
         return False
 # -----------------
@@ -726,7 +729,7 @@ class group_thread(threading.Thread):
 
 if __name__ == "__main__":
     vpath = './v.png'
-    qq = 0
+    qq = 7277017
     if len(sys.argv) > 1:
         vpath = sys.argv[1]
     if len(sys.argv) > 2:
@@ -735,7 +738,8 @@ if __name__ == "__main__":
     try:
         pass_time()
         qqLogin = Login(vpath, qq)
-    except Exception, e:
+    except Exception as e:
+        print(e)
         logging.critical(str(e))
         os._exit(1)
     t_check = check_msg()
@@ -750,7 +754,7 @@ if __name__ == "__main__":
                     logging.info("关注:"+str(tmp))
                 else:
                     logging.error("无法找到群："+str(tmp))
-    except Exception, e:
+    except Exception as e:
         logging.error("读取组存档出错:"+str(e))
 
 
